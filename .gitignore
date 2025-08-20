@@ -2,3 +2,4 @@ venv/
 .ipynb_checkpoints/
 mlb_data.db
 mlb_data.db
+.DS_Store
