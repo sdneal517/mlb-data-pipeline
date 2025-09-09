@@ -1,0 +1,7 @@
+1. Bronze → Silver (separate notebook/script for each entity):
+
+teams_silver (built from teams API)
+
+schedule_silver (built from schedule API)
+
+standings_silver (built from standings API)
