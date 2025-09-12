@@ -1,52 +1,65 @@
 # refresh_standings_silver.py
 
+import statsapi
+import pandas as pd
 import requests
 import sqlite3
-from common import get_conn, log
+from datetime import date, datetime
+import os
 
-API_URL = "https://statsapi.mlb.com/api/v1/standings"
+def fetch_standings(season, standings_date):
+    """Fetch standings for both AL and NL."""
+    clean_rows = []
+    for league_id in [103, 104]:  # AL=103, NL=104
+        data = statsapi.get("standings", {"leagueId": league_id, "season": season, "date": standings_date})
+        for rec in data.get("records", []):
+            league = rec.get("league", {}) or {}
+            division = rec.get("division", {}) or {}
+            for tr in rec.get("teamRecords", []):
+                team = tr.get("team", {}) or {}
+                clean_rows.append({
+                    "season": season,
+                    "standings_date": standings_date,
+                    "league_id": league.get("id"),
+                    "division_id": division.get("id"),
+                    "team_id": team.get("id"),
+                    "team_name": team.get("name"),
+                    "wins": tr.get("wins"),
+                    "losses": tr.get("losses"),
+                    "pct": tr.get("winningPercentage"),
+                    "games_back": tr.get("gamesBack"),
+                    "wc_games_back": tr.get("wildCardGamesBack"),
+                    "division_leader": tr.get("divisionLeader"),
+                    "created_at": datetime.now(),
+                    "last_updated": datetime.now()
+                })
+    return pd.DataFrame(clean_rows)
 
-def fetch_standings():
-    """Pull standings data from MLB Stats API."""
-    log.info("Fetching standings data...")
-    resp = requests.get(API_URL, params={"leagueId": "103,104"})  # AL=103, NL=104
-    resp.raise_for_status()
-    return resp.json()
+def enrich_with_lookups(df):
+    """Add league and division names via lookup tables."""
+    leagues = requests.get("https://statsapi.mlb.com/api/v1/leagues").json()["leagues"]
+    df_leagues = pd.DataFrame([{"league_id": l["id"], "league_name": l["name"]} for l in leagues])
 
-def transform_standings(data):
-    """Turn raw JSON into list of dicts ready for SQLite insert."""
-    rows = []
-    for record in data.get("records", []):
-        division = record.get("division", {}).get("name")
-        for team in record["teamRecords"]:
-            rows.append({
-                "team_id": team["team"]["id"],
-                "team_name": team["team"]["name"],
-                "division": division,
-                "w": team["wins"],
-                "l": team["losses"],
-                "gb": team.get("gamesBack", "0"),
-                "wc_gb": team.get("wildCardGamesBack", "0"),
-            })
-    return rows
+    divs = requests.get("https://statsapi.mlb.com/api/v1/divisions").json()["divisions"]
+    df_divs = pd.DataFrame([{"division_id": d["id"], "division_name": d["name"]} for d in divs])
 
-def load_standings(rows):
-    """Insert standings into standings_silver table."""
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM standings_silver")
-    cur.executemany("""
-        INSERT INTO standings_silver (team_id, team_name, division, w, l, gb, wc_gb)
-        VALUES (:team_id, :team_name, :division, :w, :l, :gb, :wc_gb)
-    """, rows)
-    conn.commit()
+    df = df.merge(df_leagues, on="league_id", how="left")
+    df = df.merge(df_divs, on="division_id", how="left")
+    return df
+
+def load_standings(df):
+    """Write standings data into SQLite."""
+    db_path = os.path.join(os.getcwd(), "mlb_data.db")
+    conn = sqlite3.connect(db_path)
+    df.to_sql("standings_silver", conn, if_exists="replace", index=False)
     conn.close()
-    log.info(f"Inserted {len(rows)} rows into standings_silver")
+    print(f"standings_silver written: {len(df)} rows")
 
 def main():
-    data = fetch_standings()
-    rows = transform_standings(data)
-    load_standings(rows)
+    today = date.today().isoformat()
+    df = fetch_standings(season=2025, standings_date=today)
+    df = enrich_with_lookups(df)
+    load_standings(df)
 
 if __name__ == "__main__":
     main()

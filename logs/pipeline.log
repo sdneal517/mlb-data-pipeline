@@ -19,3 +19,9 @@
 2025-09-11 21:10:26,916 [INFO] Inserted 9 rows into schedule_silver
 2025-09-11 21:12:26,915 [INFO] Building watchability DataFrame...
 2025-09-11 21:12:26,935 [INFO] ✅ watchability_gold updated with 9 rows
+2025-09-12 14:11:56,293 [INFO] Building watchability DataFrame...
+2025-09-12 14:11:58,160 [INFO] watchability_gold updated with 39 rows
+2025-09-12 14:34:07,212 [INFO] Building watchability DataFrame...
+2025-09-12 14:34:09,082 [INFO] watchability_gold updated with 15 rows
+2025-09-12 14:59:02,880 [INFO] watchability_silver updated with 15 rows
+2025-09-12 14:59:04,336 [INFO] watchability_gold updated with 15 rows

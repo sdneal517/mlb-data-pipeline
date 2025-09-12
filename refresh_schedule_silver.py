@@ -1,47 +1,65 @@
 # refresh_schedule_silver.py
 
-import requests
+import statsapi
+import pandas as pd
 import sqlite3
-from common import get_conn, log
+from datetime import date, datetime
+import os
 
-API_URL = "https://statsapi.mlb.com/api/v1/schedule"
-
-def fetch_schedule():
-    log.info("Fetching schedule data...")
-    resp = requests.get(API_URL, params={"sportId": 1, "date": "09/11/2025"})  # Example date
-    resp.raise_for_status()
-    return resp.json()
+def fetch_schedule_today():
+    """Fetch ONLY today's schedule for MLB (sportId=1)."""
+    today = date.today().isoformat()
+    return statsapi.get(
+        "schedule",
+        {"sportId": 1, "startDate": today, "endDate": today}
+    )
 
 def transform_schedule(data):
-    rows = []
-    for date in data.get("dates", []):
-        for game in date.get("games", []):
-            rows.append({
-                "game_pk": game["gamePk"],
-                "game_date": date["date"],
-                "home_team": game["teams"]["home"]["team"]["name"],
-                "away_team": game["teams"]["away"]["team"]["name"],
-                "status": game["status"]["detailedState"],
-                "game_time": game.get("gameDate"),
-            })
-    return rows
+    """Parse raw schedule data into clean rows (today only)."""
+    clean_games = []
+    for bucket in data.get("dates", []):
+        for g in bucket.get("games", []):
+            status = g.get("status", {}) or {}
+            teams  = g.get("teams", {}) or {}
+            home   = (teams.get("home") or {}).get("team") or {}
+            away   = (teams.get("away") or {}).get("team") or {}
+            venue  = g.get("venue", {}) or {}
 
-def load_schedule(rows):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM schedule_silver")
-    cur.executemany("""
-        INSERT INTO schedule_silver (game_pk, game_date, home_team, away_team, status, game_time)
-        VALUES (:game_pk, :game_date, :home_team, :away_team, :status, :game_time)
-    """, rows)
-    conn.commit()
+            clean_games.append({
+                "game_pk": g.get("gamePk"),
+                "official_date": g.get("officialDate"),     # YYYY-MM-DD
+                "game_datetime_utc": g.get("gameDate"),     # ISO UTC
+                "status_code": status.get("statusCode"),
+                "status_detailed": status.get("detailedState"),
+                "game_type": g.get("gameType"),
+                "series_game_number": g.get("seriesGameNumber"),
+                "series_description": g.get("seriesDescription"),
+                "doubleheader": g.get("doubleHeader"),
+                "day_night": g.get("dayNight"),
+                "scheduled_innings": g.get("scheduledInnings"),
+                "home_team_id": home.get("id"),
+                "home_team_name": home.get("name"),
+                "away_team_id": away.get("id"),
+                "away_team_name": away.get("name"),
+                "venue_id": venue.get("id"),
+                "venue_name": venue.get("name"),
+                "created_at": datetime.now(),
+                "last_updated": datetime.now()
+            })
+    return pd.DataFrame(clean_games)
+
+def load_schedule(df):
+    """Write schedule data into SQLite (overwrite table)."""
+    db_path = os.path.join(os.getcwd(), "mlb_data.db")
+    conn = sqlite3.connect(db_path)
+    df.to_sql("schedule_silver", conn, if_exists="replace", index=False)
     conn.close()
-    log.info(f"Inserted {len(rows)} rows into schedule_silver")
+    print(f"schedule_silver written: {len(df)} rows")
 
 def main():
-    data = fetch_schedule()
-    rows = transform_schedule(data)
-    load_schedule(rows)
+    raw = fetch_schedule_today()
+    df = transform_schedule(raw)
+    load_schedule(df)
 
 if __name__ == "__main__":
     main()
