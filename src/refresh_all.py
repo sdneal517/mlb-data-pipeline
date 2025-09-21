@@ -3,29 +3,30 @@
 import subprocess
 import sys
 
-# List of scripts to run in order
+# List of scripts to run in order (now with src/ prefix)
 scripts = [
-    "refresh_teams_silver.py",
-    "refresh_standings_silver.py",
-    "refresh_schedule_silver.py",
-    "refresh_watchability_silver.py",   # new: builds raw scoring table
-    "build_watchability_gold.py"        # trims silver into email-ready gold
+    "src/refresh_teams_silver.py",
+    "src/refresh_standings_silver.py",
+    "src/refresh_schedule_silver.py",
+    "src/refresh_watchability_silver.py",   # builds raw scoring table
+    "src/build_watchability_gold.py",       # trims silver into email-ready gold
+    "src/send_digest.py"       
 ]
 
 def run_script(script):
-    print(f"\n▶ Running {script} ...")
+    print(f"\nRunning {script} ...")
     result = subprocess.run([sys.executable, script], capture_output=True, text=True)
     if result.returncode == 0:
         print(result.stdout)
     else:
-        print(f"❌ {script} failed")
+        print(f"FAILED: {script}")
         print(result.stderr)
         sys.exit(1)
 
 def main():
     for script in scripts:
         run_script(script)
-    print("\n✅ All refresh tasks completed successfully!")
+    print("\nAll refresh tasks completed successfully!")
 
 if __name__ == "__main__":
     main()
