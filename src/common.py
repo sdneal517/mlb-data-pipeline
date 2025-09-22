@@ -4,8 +4,9 @@ import logging
 from datetime import datetime, timezone
 import sqlite3
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = PROJECT_ROOT / "mlb_data.db"
+
 
 # basic logger (file + console)
 LOGS_DIR = PROJECT_ROOT / "logs"

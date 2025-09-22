@@ -170,12 +170,18 @@ def main():
 
     df = build_watchability_silver(standings, schedule)
 
+    # SAFEGUARD: handle empty dataframe
+    if df.empty:
+        log.warning("No games found for today — skipping watchability_silver refresh")
+        return
+
     # Write to watchability_silver
     with get_conn() as conn:
         df.to_sql("watchability_silver", conn, if_exists="replace", index=False)
 
     log.info(f"watchability_silver updated with {len(df)} rows")
     print(df.head())
+
 
 if __name__ == "__main__":
     main()

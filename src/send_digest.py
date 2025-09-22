@@ -10,6 +10,7 @@ import smtplib
 from email.message import EmailMessage
 import os
 
+
 def build_pdf(df, pdf_path="watchability_digest.pdf"):
     """Build a PDF from the watchability_gold DataFrame."""
     doc = SimpleDocTemplate(pdf_path, pagesize=letter)
@@ -38,7 +39,7 @@ def build_pdf(df, pdf_path="watchability_digest.pdf"):
 
 
 def send_email_with_pdf(pdf_path, recipients, subject="MLB Watchability Digest"):
-    """Send the generated PDF to recipients via SMTP."""
+    """Send the generated PDF to recipients via SMTP, with error logging."""
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = os.environ.get("EMAIL_USER")  # set this in your env
@@ -47,14 +48,21 @@ def send_email_with_pdf(pdf_path, recipients, subject="MLB Watchability Digest")
 
     # Attach PDF
     with open(pdf_path, "rb") as f:
-        msg.add_attachment(f.read(), maintype="application", subtype="pdf", filename=os.path.basename(pdf_path))
+        msg.add_attachment(
+            f.read(),
+            maintype="application",
+            subtype="pdf",
+            filename=os.path.basename(pdf_path),
+        )
 
-    # Send via Gmail SMTP (requires app password)
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(os.environ.get("EMAIL_USER"), os.environ.get("EMAIL_PASS"))
-        smtp.send_message(msg)
-
-    log.info(f"Email sent to {recipients}")
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(os.environ.get("EMAIL_USER"), os.environ.get("EMAIL_PASS"))
+            smtp.send_message(msg)
+        log.info(f"Email sent to {recipients}")
+    except Exception as e:
+        log.error(f"Failed to send email: {e}")
+        raise
 
 
 def main():
@@ -62,8 +70,9 @@ def main():
     with get_conn() as conn:
         df = pd.read_sql("SELECT * FROM watchability_gold", conn)
 
+    # SAFEGUARD: handle empty dataframe
     if df.empty:
-        log.warning("No rows in watchability_gold, skipping email")
+        log.warning("No rows in watchability_gold — skipping digest email")
         return
 
     pdf_path = build_pdf(df)

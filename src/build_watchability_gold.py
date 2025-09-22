@@ -13,6 +13,11 @@ def build_watchability_gold():
     with get_conn() as conn:
         df = pd.read_sql("SELECT * FROM watchability_silver", conn)
 
+    # SAFEGUARD: handle empty dataframe
+    if df.empty:
+        log.warning("No rows in watchability_silver — skipping watchability_gold build")
+        return
+
     # --- Transformations ---
     # Format game_date as MM-DD
     df["game_date"] = pd.to_datetime(df["game_date"]).dt.strftime("%m-%d")
